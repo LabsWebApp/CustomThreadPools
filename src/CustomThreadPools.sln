@@ -5,6 +5,8 @@ VisualStudioVersion = 17.1.32328.378
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InstanceThreadPool.DemoDebug", "InstanceThreadPool.DemoDebug\InstanceThreadPool.DemoDebug.csproj", "{3764818C-F250-409B-AABC-3F4C056DF72C}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InstanceThreadPool.ConsoleTest", "InstanceThreadPool.ConsoleTest\InstanceThreadPool.ConsoleTest.csproj", "{646616FD-0226-4437-A62D-9BFE24653A95}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{3764818C-F250-409B-AABC-3F4C056DF72C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3764818C-F250-409B-AABC-3F4C056DF72C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3764818C-F250-409B-AABC-3F4C056DF72C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{646616FD-0226-4437-A62D-9BFE24653A95}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{646616FD-0226-4437-A62D-9BFE24653A95}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{646616FD-0226-4437-A62D-9BFE24653A95}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{646616FD-0226-4437-A62D-9BFE24653A95}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

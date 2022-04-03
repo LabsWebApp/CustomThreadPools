@@ -10,17 +10,20 @@ public class InstanceThreadPool
 
     private readonly Queue<(Action<object?> work, object? parameter)> _works = new();
     private readonly AutoResetEvent _workingEvent = new(false);
-    private readonly AutoResetEvent _executeEvent = new(true);
+    private readonly AutoResetEvent _queueEvent = new(true);
 
     public string Name => _name ?? GetHashCode().ToString("x");
 
     public InstanceThreadPool(int maxThreadsCount, ThreadPriority priority = ThreadPriority.Normal, string? name = null)
     {
         if (maxThreadsCount <= 0)
-            throw new ArgumentOutOfRangeException(nameof(maxThreadsCount), maxThreadsCount, "Число потоков в пуле должно быть больше, либо равно 1");
+            throw new ArgumentOutOfRangeException(
+                nameof(maxThreadsCount), 
+                maxThreadsCount, 
+                "Число потоков в пуле должно быть больше либо равно 1");
 
         _priority = priority;
-        _name = Name;
+        _name = name;
         _threads = new Thread[maxThreadsCount];
         Initialize();
     }
@@ -41,60 +44,63 @@ public class InstanceThreadPool
         }
     }
 
-    public void Execute(Action work) => Execute(_ => work(), null);
+    public void Execute(Action work) => Execute(null, _ => work());
 
-    public void Execute(Action<object?> work, object? parameter)
+    public void Execute(object? parameter, Action<object?> work)
     {
         // запрашиваем доступ к очереди
-        _executeEvent.WaitOne();
+        _queueEvent.WaitOne(); 
 
         // добавляем в очередь действие 
         _works.Enqueue((work, parameter));
+        
         // разрешаем доступ к очереди
-        _executeEvent.Set();
+        _queueEvent.Set();
         
         _workingEvent.Set();
     }
 
     private void WorkingThread()
     {
-        var threadName = Thread.CurrentThread.Name;
+        var name = Thread.CurrentThread.Name;
 
         while (true)
         {
-            // запрашиваем доступ к очереди
-            _executeEvent.WaitOne();
-
             // дожидаемся разрешения на выполнение
             _workingEvent.WaitOne();
+             
+            // запрашиваем доступ к очереди
+            _queueEvent.WaitOne();
 
             // до тех пор пока в очереди нет заданий
             while (_works.Count == 0) 
             {
                 // освобождаем очередь
-                _executeEvent.Set();
+                _queueEvent.Set();
                 // дожидаемся разрешения на выполнение
                 _workingEvent.WaitOne();
                 // запрашиваем доступ к очереди вновь
-                _executeEvent.WaitOne();
+                _queueEvent.WaitOne();
             }
 
             var (work, parameter) = _works.Dequeue();
+            
             // если после изъятия из очереди задания там осталось ещё что-то
             if (_works.Count > 0)
                 //  то запускаем ещё один поток на выполнение
-                _workingEvent.Set(); 
+                _workingEvent.Set();
 
-            _executeEvent.Set(); // разрешаем доступ к очереди
+            // разрешаем доступ к очереди
+            _queueEvent.Set(); 
 
-            Trace.TraceInformation($"Поток {threadName}[id:{Environment.CurrentManagedThreadId}] выполняет задание");
+            Trace.TraceInformation($"Поток {name}[id:{Environment.CurrentManagedThreadId}] выполняет задание");
             try
             {
                 work(parameter);
             }
             catch (Exception e)
             {
-                Trace.TraceError($"Ошибка выполнения задания в потоке {threadName}:{e}");
+                Trace.TraceError($"Ошибка выполнения задания в потоке {name}:{e}");
             }
         }
     }
