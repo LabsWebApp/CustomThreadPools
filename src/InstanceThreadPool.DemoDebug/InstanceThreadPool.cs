@@ -1,4 +1,6 @@
-﻿namespace Pool;
+﻿using System.Diagnostics;
+
+namespace Pool;
 
 public class InstanceThreadPool
 {
@@ -56,6 +58,44 @@ public class InstanceThreadPool
 
     private void WorkingThread()
     {
-        throw new NotImplementedException();
+        var threadName = Thread.CurrentThread.Name;
+
+        while (true)
+        {
+            // запрашиваем доступ к очереди
+            _executeEvent.WaitOne();
+
+            // дожидаемся разрешения на выполнение
+            _workingEvent.WaitOne();
+
+            // до тех пор пока в очереди нет заданий
+            while (_works.Count == 0) 
+            {
+                // освобождаем очередь
+                _executeEvent.Set();
+                // дожидаемся разрешения на выполнение
+                _workingEvent.WaitOne();
+                // запрашиваем доступ к очереди вновь
+                _executeEvent.WaitOne();
+            }
+
+            var (work, parameter) = _works.Dequeue();
+            // если после изъятия из очереди задания там осталось ещё что-то
+            if (_works.Count > 0)
+                //  то запускаем ещё один поток на выполнение
+                _workingEvent.Set(); 
+
+            _executeEvent.Set(); // разрешаем доступ к очереди
+
+            Trace.TraceInformation($"Поток {threadName}[id:{Environment.CurrentManagedThreadId}] выполняет задание");
+            try
+            {
+                work(parameter);
+            }
+            catch (Exception e)
+            {
+                Trace.TraceError($"Ошибка выполнения задания в потоке {threadName}:{e}");
+            }
+        }
     }
 }
