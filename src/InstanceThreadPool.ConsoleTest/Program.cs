@@ -1,11 +1,11 @@
 ﻿using Pool;
 using static System.Console;
 
-var messages = Enumerable.Range(1, 100).Select(i => $"Message-{i}");
-WriteLine("init start");
-var threadPool = new InstanceThreadPool(1024, name: "Обработчик сообщений");
-WriteLine("init finish");
-ReadKey();
+//System.Diagnostics.Trace.Listeners.Add(new System.Diagnostics.ConsoleTraceListener());
+var messages = Enumerable.Range(1, 10000).Select(i => $"Message-{i}");
+
+var threadPool = new InstanceThreadPool(8, name: "Обработчик сообщений");
+threadPool.DisposeThreadJoinTimeout = 10;
 foreach (var message in messages)
     threadPool.Execute(message, obj =>
     {
@@ -14,5 +14,7 @@ foreach (var message in messages)
         Thread.Sleep(100);
         WriteLine($">> Обработка сообщения: {msg} выполнена!");
     });
+//Thread.Sleep(10);
+//threadPool.Dispose();
 
-Console.ReadKey();
+ReadKey();

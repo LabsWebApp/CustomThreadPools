@@ -2,7 +2,7 @@
 
 namespace Pool;
 
-public class InstanceThreadPool
+public class InstanceThreadPool : IDisposable
 {
     private readonly string? _name;
     private readonly Thread[] _threads;
@@ -11,10 +11,30 @@ public class InstanceThreadPool
     private readonly Queue<(Action<object?> work, object? parameter)> _works = new();
     private readonly AutoResetEvent _workingEvent = new(false);
     private readonly AutoResetEvent _queueEvent = new(true);
+    
+    private volatile bool _canWork = true;
+    private int _disposeThreadJoinTimeout = 100;
+    private bool _disposedValue;
+
+    public int DisposeThreadJoinTimeout
+    {
+        get => _disposeThreadJoinTimeout;
+        set
+        {
+            if (value < 0) 
+                throw new ArgumentOutOfRangeException(
+                    nameof(value), value, 
+                    "Таймаут не может быть меньше 0.");
+            _disposeThreadJoinTimeout = value;
+        }
+    } 
 
     public string Name => _name ?? GetHashCode().ToString("x");
 
-    public InstanceThreadPool(int maxThreadsCount, ThreadPriority priority = ThreadPriority.Normal, string? name = null)
+    public InstanceThreadPool(
+        int maxThreadsCount, 
+        ThreadPriority priority = ThreadPriority.Normal,
+        string? name = null)
     {
         if (maxThreadsCount <= 0)
             throw new ArgumentOutOfRangeException(
@@ -25,6 +45,7 @@ public class InstanceThreadPool
         _priority = priority;
         _name = name;
         _threads = new Thread[maxThreadsCount];
+
         Initialize();
     }
 
@@ -48,8 +69,14 @@ public class InstanceThreadPool
 
     public void Execute(object? parameter, Action<object?> work)
     {
+        if (!_canWork) throw new InvalidOperationException(
+            "Попытка передать задание уничтоженному пулу потоков");
+
         // запрашиваем доступ к очереди
-        _queueEvent.WaitOne(); 
+        _queueEvent.WaitOne();
+
+        if (!_canWork) throw new InvalidOperationException(
+            "Попытка передать задание уничтоженному пулу потоков");
 
         // добавляем в очередь действие 
         _works.Enqueue((work, parameter));
@@ -62,46 +89,99 @@ public class InstanceThreadPool
 
     private void WorkingThread()
     {
-        var name = Thread.CurrentThread.Name;
+        var threadName = Thread.CurrentThread.Name;
+        Trace.TraceInformation($"Поток {threadName} запущен с ID: {Environment.CurrentManagedThreadId}");
 
-        while (true)
+        try
         {
-            // дожидаемся разрешения на выполнение
-            _workingEvent.WaitOne();
-             
-            // запрашиваем доступ к очереди
-            _queueEvent.WaitOne();
-
-            // до тех пор пока в очереди нет заданий
-            while (_works.Count == 0) 
+            while (_canWork)
             {
-                // освобождаем очередь
-                _queueEvent.Set();
                 // дожидаемся разрешения на выполнение
                 _workingEvent.WaitOne();
-                // запрашиваем доступ к очереди вновь
+                if (!_canWork) break;
+
+                // запрашиваем доступ к очереди
                 _queueEvent.WaitOne();
-            }
 
-            var (work, parameter) = _works.Dequeue();
-            
-            // если после изъятия из очереди задания там осталось ещё что-то
-            if (_works.Count > 0)
-                //  то запускаем ещё один поток на выполнение
-                _workingEvent.Set();
+                // до тех пор пока в очереди нет заданий
+                while (_works.Count == 0)
+                {
+                    // освобождаем очередь
+                    _queueEvent.Set();
 
-            // разрешаем доступ к очереди
-            _queueEvent.Set(); 
+                    // дожидаемся разрешения на выполнение
+                    _workingEvent.WaitOne();
+                    if (!_canWork) break;
 
-            Trace.TraceInformation($"Поток {name}[id:{Environment.CurrentManagedThreadId}] выполняет задание");
-            try
-            {
-                work(parameter);
-            }
-            catch (Exception e)
-            {
-                Trace.TraceError($"Ошибка выполнения задания в потоке {name}:{e}");
+                    // запрашиваем доступ к очереди вновь
+                    _queueEvent.WaitOne();
+                }
+
+                var (work, parameter) = _works.Dequeue();
+
+                // если после изъятия из очереди задания там осталось ещё что-то
+                if (_works.Count > 0)
+                    //  то запускаем ещё один поток на выполнение
+                    _workingEvent.Set();
+
+                // разрешаем доступ к очереди
+                _queueEvent.Set();
+
+                Trace.TraceInformation($"Поток {threadName}[id:{Environment.CurrentManagedThreadId}] выполняет задание");
+                try
+                {
+                    var timer = Stopwatch.StartNew();
+                    work(parameter);
+                    timer.Stop();
+
+                    Trace.TraceInformation(
+                        $"Поток {threadName}[id:{Environment.CurrentManagedThreadId}] выполнил задание за {timer.ElapsedMilliseconds}мс");
+                }
+                catch (Exception e)
+                {
+                    if (e is ThreadInterruptedException) throw;
+                    Trace.TraceError($"Ошибка выполнения задания в потоке {threadName}:{e}");
+                }
             }
         }
+        catch (ThreadInterruptedException)
+        {
+            Trace.TraceWarning(
+                $"Поток {threadName} был принудительно прерван при завершении работы пула \"{Name}\"");
+        }
+        finally
+        {
+            Trace.TraceInformation($"Поток {threadName} завершил свою работу");
+            _workingEvent.Set();
+        }
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposedValue) return;
+
+        if (disposing)
+        {
+            _canWork = false;
+
+            _workingEvent.Set();
+            foreach (var thread in _threads)
+                if (!thread.Join(DisposeThreadJoinTimeout))
+                    thread.Interrupt();
+
+            foreach (var thread in _threads)
+                thread.Join();
+
+            _queueEvent.Dispose();
+            _workingEvent.Dispose();
+            Trace.TraceInformation($"Пул потоков \"{Name}\" уничтожен");
+        }
+        _disposedValue = true;
+    }
+
+    public void Dispose()
+    {
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
     }
 }
