@@ -1,6 +1,6 @@
 ﻿using System.Diagnostics;
 
-namespace Pool;
+namespace DebugPool;
 
 public class InstanceThreadPool : IDisposable
 {
@@ -13,7 +13,7 @@ public class InstanceThreadPool : IDisposable
     private readonly AutoResetEvent _queueEvent = new(true);
     
     private volatile bool _canWork = true;
-    private int _disposeThreadJoinTimeout = 100;
+    private int _disposeThreadJoinTimeout = 1;
     private bool _disposedValue;
 
     public int DisposeThreadJoinTimeout
@@ -32,15 +32,11 @@ public class InstanceThreadPool : IDisposable
     public string Name => _name ?? GetHashCode().ToString("x");
 
     public InstanceThreadPool(
-        int maxThreadsCount, 
+        int maxThreadsCount = 0, 
         ThreadPriority priority = ThreadPriority.Normal,
         string? name = null)
     {
-        if (maxThreadsCount <= 0)
-            throw new ArgumentOutOfRangeException(
-                nameof(maxThreadsCount), 
-                maxThreadsCount, 
-                "Число потоков в пуле должно быть больше либо равно 1");
+        if (maxThreadsCount <= 0) maxThreadsCount = Environment.ProcessorCount;
 
         _priority = priority;
         _name = name;

@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -8,7 +8,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" Version="0.13.1" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\InstanceThreadPool.DemoDebug\InstanceThreadPool.DemoDebug.csproj" />
+    <ProjectReference Include="..\Threads\Threads.csproj" />
   </ItemGroup>
 
 </Project>

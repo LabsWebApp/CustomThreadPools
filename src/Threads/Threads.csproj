@@ -4,7 +4,8 @@
     <TargetFramework>net6.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <RootNamespace>DebugPool</RootNamespace>
+    <AssemblyName>Threads</AssemblyName>
+    <RootNamespace>Pool</RootNamespace>
   </PropertyGroup>
 
 </Project>
